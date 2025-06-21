@@ -7,23 +7,49 @@ const path = require("path")
 const app = express()
 const port = process.env.PORT || 3000
 
-// Database connection
+// Database connection with better error handling for Render
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 })
 
+// Test database connection on startup
+async function testDatabaseConnection() {
+  try {
+    const result = await pool.query("SELECT NOW()")
+    console.log("✅ Database connected successfully at:", result.rows[0].now)
+    return true
+  } catch (error) {
+    console.error("❌ Database connection failed:", error.message)
+    console.error("DATABASE_URL:", process.env.DATABASE_URL ? "Set" : "Not set")
+    return false
+  }
+}
+
 // Middleware
-app.use(express.json())
-app.use(express.static(__dirname))
+app.use(express.json({ limit: "10mb" }))
+app.use(express.urlencoded({ extended: true }))
+app.use(express.static(path.join(__dirname)))
+
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "mindful-space-secret-key",
+    secret: process.env.SESSION_SECRET || "mindful-space-secret-key-change-in-production",
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }, // 24 hours
+    cookie: {
+      secure: process.env.NODE_ENV === "production" ? false : false, // Set to true if using HTTPS
+      maxAge: 24 * 60 * 60 * 1000,
+    },
   }),
 )
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`)
+  next()
+})
 
 // Authentication middleware
 const requireAuth = (req, res, next) => {
@@ -33,6 +59,11 @@ const requireAuth = (req, res, next) => {
     res.status(401).json({ message: "Authentication required" })
   }
 }
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "OK", timestamp: new Date().toISOString() })
+})
 
 // Routes
 
@@ -65,14 +96,21 @@ app.get("/profile.html", (req, res) => {
   res.sendFile(path.join(__dirname, "profile.html"))
 })
 
-// Auth routes
+// Auth routes with better error handling
 app.post("/api/signup", async (req, res) => {
   try {
+    console.log("Signup request received:", { ...req.body, password: "[HIDDEN]" })
+
     const { name, email, password, birthdate } = req.body
+
+    if (!name || !email || !password || !birthdate) {
+      return res.status(400).json({ message: "All fields are required" })
+    }
 
     // Check if user already exists
     const existingUser = await pool.query("SELECT id FROM users WHERE email = $1", [email])
     if (existingUser.rows.length > 0) {
+      console.log("User already exists:", email)
       return res.status(400).json({ message: "User already exists" })
     }
 
@@ -85,16 +123,26 @@ app.post("/api/signup", async (req, res) => {
       [name, email, hashedPassword, birthdate],
     )
 
+    console.log("User created successfully:", result.rows[0])
     res.status(201).json({ message: "User created successfully", user: result.rows[0] })
   } catch (error) {
     console.error("Signup error:", error)
-    res.status(500).json({ message: "Internal server error" })
+    res.status(500).json({
+      message: "Internal server error",
+      error: process.env.NODE_ENV === "development" ? error.message : "Database error",
+    })
   }
 })
 
 app.post("/api/login", async (req, res) => {
   try {
+    console.log("Login request received for:", req.body.email)
+
     const { email, password } = req.body
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" })
+    }
 
     // Find user
     const result = await pool.query("SELECT * FROM users WHERE email = $1", [email])
@@ -112,6 +160,7 @@ app.post("/api/login", async (req, res) => {
 
     // Set session
     req.session.userId = user.id
+    console.log("User logged in successfully:", user.email)
 
     res.json({ message: "Login successful", user: { id: user.id, name: user.name, email: user.email } })
   } catch (error) {
@@ -121,8 +170,13 @@ app.post("/api/login", async (req, res) => {
 })
 
 app.post("/api/logout", (req, res) => {
-  req.session.destroy()
-  res.json({ message: "Logged out successfully" })
+  req.session.destroy((err) => {
+    if (err) {
+      console.error("Logout error:", err)
+      return res.status(500).json({ message: "Could not log out" })
+    }
+    res.json({ message: "Logged out successfully" })
+  })
 })
 
 // User routes
@@ -131,6 +185,11 @@ app.get("/api/user", requireAuth, async (req, res) => {
     const result = await pool.query("SELECT id, name, email, birthdate, bio FROM users WHERE id = $1", [
       req.session.userId,
     ])
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "User not found" })
+    }
+
     res.json(result.rows[0])
   } catch (error) {
     console.error("Get user error:", error)
@@ -595,15 +654,32 @@ app.delete("/api/connection/:id", requireAuth, async (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack)
+  console.error("Unhandled error:", err.stack)
   res.status(500).json({ message: "Something went wrong!" })
 })
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ message: "Page not found" })
+// 404 handler for API routes
+app.use("/api/*", (req, res) => {
+  console.log("404 - API route not found:", req.path)
+  res.status(404).json({ message: "API endpoint not found" })
 })
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`)
+// 404 handler for other routes
+app.use((req, res) => {
+  console.log("404 - Page not found:", req.path)
+  res.status(404).send("Page not found")
+})
+
+// Start server with database connection test
+app.listen(port, async () => {
+  console.log(`🚀 Server running on port ${port}`)
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || "development"}`)
+
+  // Test database connection
+  const dbConnected = await testDatabaseConnection()
+  if (!dbConnected) {
+    console.log("⚠️  Database not connected. Please check your DATABASE_URL environment variable.")
+  } else {
+    console.log("✅ Application ready!")
+  }
 })
