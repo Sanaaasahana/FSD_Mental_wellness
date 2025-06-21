@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindfulSpace - Support Group</title>
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>🌸 MindfulSpace</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="home.html">🏠 Home</a></li>
+                <li><a href="journal.html">📝 Journal</a></li>
+                <li><a href="support-group.html" class="active">🤝 Support Group</a></li>
+                <li><a href="connect.html">💬 Connect</a></li>
+                <li><a href="profile.html">👤 Profile</a></li>
+                <li><a href="#" onclick="logout()">🚪 Logout</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <div class="support-header">
+                <h1>Support Group</h1>
+                <p>Read and connect with others through shared experiences</p>
+            </div>
+
+            <div class="support-filters">
+                <div class="search-bar">
+                    <input type="text" id="searchInput" placeholder="Search entries..." onkeyup="searchEntries()">
+                </div>
+                <div class="category-filter">
+                    <select id="categoryFilter" onchange="loadPublicEntries()">
+                        <option value="">All Categories</option>
+                        <option value="personal">Personal</option>
+                        <option value="anxiety">Anxiety</option>
+                        <option value="depression">Depression</option>
+                        <option value="gratitude">Gratitude</option>
+                        <option value="goals">Goals</option>
+                        <option value="relationships">Relationships</option>
+                        <option value="work">Work/School</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="public-entries">
+                <div id="publicEntriesList" class="entries-list"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let allEntries = [];
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/user');
+                if (!response.ok) {
+                    window.location.href = '/login.html';
+                }
+            } catch (error) {
+                window.location.href = '/login.html';
+            }
+        }
+
+        async function loadPublicEntries() {
+            try {
+                const category = document.getElementById('categoryFilter').value;
+                const url = category ? `/api/public-journal?category=${category}` : '/api/public-journal';
+                const response = await fetch(url);
+                allEntries = await response.json();
+                displayEntries(allEntries);
+            } catch (error) {
+                console.error('Error loading public entries:', error);
+            }
+        }
+
+        function displayEntries(entries) {
+            const list = document.getElementById('publicEntriesList');
+            list.innerHTML = entries.map(entry => `
+                <div class="journal-entry public-entry">
+                    <div class="entry-header">
+                        <h3>${entry.title}</h3>
+                        <div class="entry-meta">
+                            <span class="author">By: ${entry.author_name}</span>
+                            <span class="category">${entry.category}</span>
+                            <span class="date">${new Date(entry.created_at).toLocaleDateString()}</span>
+                        </div>
+                    </div>
+                    <div class="entry-content">
+                        <p>${entry.content}</p>
+                    </div>
+                    <div class="entry-actions">
+                        <button onclick="likeEntry(${entry.id})" class="like-btn">
+                            ❤️ ${entry.likes || 0}
+                        </button>
+                        <button onclick="showComments(${entry.id})" class="comment-btn">
+                            💬 Comments
+                        </button>
+                    </div>
+                    <div id="comments-${entry.id}" class="comments-section hidden">
+                        <div class="add-comment">
+                            <textarea id="comment-${entry.id}" placeholder="Add a supportive comment..."></textarea>
+                            <button onclick="addComment(${entry.id})" class="submit-btn">Add Comment</button>
+                        </div>
+                        <div id="comments-list-${entry.id}" class="comments-list"></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function searchEntries() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const filteredEntries = allEntries.filter(entry => 
+                entry.title.toLowerCase().includes(searchTerm) ||
+                entry.content.toLowerCase().includes(searchTerm) ||
+                entry.author_name.toLowerCase().includes(searchTerm)
+            );
+            displayEntries(filteredEntries);
+        }
+
+        async function likeEntry(entryId) {
+            try {
+                const response = await fetch(`/api/journal/${entryId}/like`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    loadPublicEntries();
+                }
+            } catch (error) {
+                console.error('Error liking entry:', error);
+            }
+        }
+
+        async function showComments(entryId) {
+            const commentsSection = document.getElementById(`comments-${entryId}`);
+            commentsSection.classList.toggle('hidden');
+            
+            if (!commentsSection.classList.contains('hidden')) {
+                await loadComments(entryId);
+            }
+        }
+
+        async function loadComments(entryId) {
+            try {
+                const response = await fetch(`/api/journal/${entryId}/comments`);
+                const comments = await response.json();
+                
+                const commentsList = document.getElementById(`comments-list-${entryId}`);
+                commentsList.innerHTML = comments.map(comment => `
+                    <div class="comment">
+                        <div class="comment-header">
+                            <strong>${comment.author_name}</strong>
+                            <span class="comment-date">${new Date(comment.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <p>${comment.content}</p>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading comments:', error);
+            }
+        }
+
+        async function addComment(entryId) {
+            const content = document.getElementById(`comment-${entryId}`).value.trim();
+            if (!content) return;
+
+            try {
+                const response = await fetch(`/api/journal/${entryId}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+                
+                if (response.ok) {
+                    document.getElementById(`comment-${entryId}`).value = '';
+                    loadComments(entryId);
+                }
+            } catch (error) {
+                console.error('Error adding comment:', error);
+            }
+        }
+
+        function logout() {
+            fetch('/api/logout', { method: 'POST' })
+                .then(() => window.location.href = '/login.html');
+        }
+
+        // Initialize page
+        checkAuth().then(() => {
+            loadPublicEntries();
+        });
+    </script>
+</body>
+</html>

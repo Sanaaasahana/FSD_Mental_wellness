@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindfulSpace - Connect</title>
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>🌸 MindfulSpace</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="home.html">🏠 Home</a></li>
+                <li><a href="journal.html">📝 Journal</a></li>
+                <li><a href="support-group.html">🤝 Support Group</a></li>
+                <li><a href="connect.html" class="active">💬 Connect</a></li>
+                <li><a href="profile.html">👤 Profile</a></li>
+                <li><a href="#" onclick="logout()">🚪 Logout</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <div class="connect-header">
+                <h1>Connect with Others</h1>
+                <p>Find and connect with people who understand your journey</p>
+            </div>
+
+            <div class="connect-tabs">
+                <button class="tab-btn active" onclick="showTab('users')">Find Users</button>
+                <button class="tab-btn" onclick="showTab('connections')">My Connections</button>
+                <button class="tab-btn" onclick="showTab('requests')">Connection Requests</button>
+            </div>
+
+            <!-- Find Users Tab -->
+            <div id="usersTab" class="tab-content">
+                <div class="search-section">
+                    <input type="text" id="userSearch" placeholder="Search users by name..." onkeyup="searchUsers()">
+                </div>
+                <div id="usersList" class="users-list"></div>
+            </div>
+
+            <!-- My Connections Tab -->
+            <div id="connectionsTab" class="tab-content hidden">
+                <div id="connectionsList" class="connections-list"></div>
+            </div>
+
+            <!-- Connection Requests Tab -->
+            <div id="requestsTab" class="tab-content hidden">
+                <div id="requestsList" class="requests-list"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let allUsers = [];
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/user');
+                if (!response.ok) {
+                    window.location.href = '/login.html';
+                }
+            } catch (error) {
+                window.location.href = '/login.html';
+            }
+        }
+
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName + 'Tab').classList.remove('hidden');
+            event.target.classList.add('active');
+            
+            // Load appropriate data
+            if (tabName === 'users') {
+                loadUsers();
+            } else if (tabName === 'connections') {
+                loadConnections();
+            } else if (tabName === 'requests') {
+                loadConnectionRequests();
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users');
+                allUsers = await response.json();
+                displayUsers(allUsers);
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+        function displayUsers(users) {
+            const list = document.getElementById('usersList');
+            list.innerHTML = users.map(user => `
+                <div class="user-card">
+                    <div class="user-info">
+                        <h3>${user.name}</h3>
+                        <p>Member since ${new Date(user.created_at).toLocaleDateString()}</p>
+                        <p>Public entries: ${user.public_entries_count || 0}</p>
+                    </div>
+                    <div class="user-actions">
+                        <button onclick="sendConnectionRequest(${user.id})" class="connect-btn">
+                            Connect
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function searchUsers() {
+            const searchTerm = document.getElementById('userSearch').value.toLowerCase();
+            const filteredUsers = allUsers.filter(user => 
+                user.name.toLowerCase().includes(searchTerm)
+            );
+            displayUsers(filteredUsers);
+        }
+
+        async function sendConnectionRequest(userId) {
+            try {
+                const response = await fetch('/api/connection-request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ receiver_id: userId })
+                });
+                
+                if (response.ok) {
+                    alert('Connection request sent!');
+                    loadUsers();
+                } else {
+                    const error = await response.json();
+                    alert(error.message || 'Error sending connection request');
+                }
+            } catch (error) {
+                alert('Error sending connection request');
+            }
+        }
+
+        async function loadConnections() {
+            try {
+                const response = await fetch('/api/connections');
+                const connections = await response.json();
+                
+                const list = document.getElementById('connectionsList');
+                list.innerHTML = connections.map(connection => `
+                    <div class="connection-card">
+                        <div class="connection-info">
+                            <h3>${connection.name}</h3>
+                            <p>Connected since ${new Date(connection.connected_at).toLocaleDateString()}</p>
+                        </div>
+                        <div class="connection-actions">
+                            <button onclick="removeConnection(${connection.id})" class="remove-btn">
+                                Remove Connection
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading connections:', error);
+            }
+        }
+
+        async function loadConnectionRequests() {
+            try {
+                const response = await fetch('/api/connection-requests');
+                const requests = await response.json();
+                
+                const list = document.getElementById('requestsList');
+                list.innerHTML = requests.map(request => `
+                    <div class="request-card">
+                        <div class="request-info">
+                            <h3>${request.sender_name}</h3>
+                            <p>Sent ${new Date(request.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <div class="request-actions">
+                            <button onclick="acceptConnectionRequest(${request.id})" class="accept-btn">
+                                Accept
+                            </button>
+                            <button onclick="rejectConnectionRequest(${request.id})" class="reject-btn">
+                                Reject
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading connection requests:', error);
+            }
+        }
+
+        async function acceptConnectionRequest(requestId) {
+            try {
+                const response = await fetch(`/api/connection-request/${requestId}/accept`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    alert('Connection request accepted!');
+                    loadConnectionRequests();
+                }
+            } catch (error) {
+                alert('Error accepting connection request');
+            }
+        }
+
+        async function rejectConnectionRequest(requestId) {
+            try {
+                const response = await fetch(`/api/connection-request/${requestId}/reject`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    loadConnectionRequests();
+                }
+            } catch (error) {
+                alert('Error rejecting connection request');
+            }
+        }
+
+        async function removeConnection(connectionId) {
+            if (confirm('Are you sure you want to remove this connection?')) {
+                try {
+                    const response = await fetch(`/api/connection/${connectionId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        loadConnections();
+                    }
+                } catch (error) {
+                    alert('Error removing connection');
+                }
+            }
+        }
+
+        function logout() {
+            fetch('/api/logout', { method: 'POST' })
+                .then(() => window.location.href = '/login.html');
+        }
+
+        // Initialize page
+        checkAuth().then(() => {
+            loadUsers();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindfulSpace - Home</title>
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>🌸 MindfulSpace</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="home.html" class="active">🏠 Home</a></li>
+                <li><a href="journal.html">📝 Journal</a></li>
+                <li><a href="support-group.html">🤝 Support Group</a></li>
+                <li><a href="connect.html">💬 Connect</a></li>
+                <li><a href="profile.html">👤 Profile</a></li>
+                <li><a href="#" onclick="logout()">🚪 Logout</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <div class="welcome-section">
+                <h1>Welcome back! How are you feeling today?</h1>
+                <p>Track your mood and reflect on what you're grateful for</p>
+            </div>
+
+            <div class="mood-section">
+                <h2>Today's Mood</h2>
+                <div class="mood-selector">
+                    <button class="mood-btn" onclick="selectMood('😊', 'happy')">😊</button>
+                    <button class="mood-btn" onclick="selectMood('😢', 'sad')">😢</button>
+                    <button class="mood-btn" onclick="selectMood('😴', 'tired')">😴</button>
+                    <button class="mood-btn" onclick="selectMood('😰', 'anxious')">😰</button>
+                    <button class="mood-btn" onclick="selectMood('😡', 'angry')">😡</button>
+                    <button class="mood-btn" onclick="selectMood('🤔', 'thoughtful')">🤔</button>
+                    <button class="mood-btn" onclick="selectMood('😌', 'calm')">😌</button>
+                    <button class="mood-btn" onclick="selectMood('🥳', 'excited')">🥳</button>
+                </div>
+                <div id="selectedMood" class="selected-mood"></div>
+            </div>
+
+            <div class="gratitude-section">
+                <h2>What are you grateful for today?</h2>
+                <div class="gratitude-input">
+                    <textarea id="gratitudeText" placeholder="Write something you're thankful for..."></textarea>
+                    <button onclick="addGratitude()" class="add-btn">Add Gratitude</button>
+                </div>
+                <div id="gratitudeList" class="gratitude-list"></div>
+            </div>
+
+            <div class="calendar-section">
+                <h2>Mood Calendar</h2>
+                <div id="moodCalendar" class="mood-calendar"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let currentUser = null;
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/user');
+                if (response.ok) {
+                    currentUser = await response.json();
+                } else {
+                    window.location.href = '/login.html';
+                }
+            } catch (error) {
+                window.location.href = '/login.html';
+            }
+        }
+
+        async function selectMood(emoji, mood) {
+            try {
+                const response = await fetch('/api/mood', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mood, emoji })
+                });
+                
+                if (response.ok) {
+                    document.getElementById('selectedMood').innerHTML = `Today's mood: ${emoji} ${mood}`;
+                    loadMoodCalendar();
+                }
+            } catch (error) {
+                console.error('Error saving mood:', error);
+            }
+        }
+
+        async function addGratitude() {
+            const text = document.getElementById('gratitudeText').value.trim();
+            if (!text) return;
+
+            try {
+                const response = await fetch('/api/gratitude', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                
+                if (response.ok) {
+                    document.getElementById('gratitudeText').value = '';
+                    loadGratitude();
+                }
+            } catch (error) {
+                console.error('Error adding gratitude:', error);
+            }
+        }
+
+        async function loadGratitude() {
+            try {
+                const response = await fetch('/api/gratitude');
+                const gratitudes = await response.json();
+                
+                const list = document.getElementById('gratitudeList');
+                list.innerHTML = gratitudes.map(g => 
+                    `<div class="gratitude-item">
+                        <p>${g.text}</p>
+                        <small>${new Date(g.created_at).toLocaleDateString()}</small>
+                    </div>`
+                ).join('');
+            } catch (error) {
+                console.error('Error loading gratitude:', error);
+            }
+        }
+
+        async function loadMoodCalendar() {
+            try {
+                const response = await fetch('/api/moods');
+                const moods = await response.json();
+                
+                const calendar = document.getElementById('moodCalendar');
+                const today = new Date();
+                const currentMonth = today.getMonth();
+                const currentYear = today.getFullYear();
+                
+                let calendarHTML = '<div class="calendar-header">';
+                calendarHTML += `<h3>${today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>`;
+                calendarHTML += '</div><div class="calendar-grid">';
+                
+                const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+                const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+                
+                // Add empty cells for days before the first day of the month
+                for (let i = 0; i < firstDay; i++) {
+                    calendarHTML += '<div class="calendar-day empty"></div>';
+                }
+                
+                // Add days of the month
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const mood = moods.find(m => m.date === dateStr);
+                    const isToday = day === today.getDate();
+                    
+                    calendarHTML += `<div class="calendar-day ${isToday ? 'today' : ''}">
+                        <span class="day-number">${day}</span>
+                        ${mood ? `<span class="day-mood">${mood.emoji}</span>` : ''}
+                    </div>`;
+                }
+                
+                calendarHTML += '</div>';
+                calendar.innerHTML = calendarHTML;
+            } catch (error) {
+                console.error('Error loading mood calendar:', error);
+            }
+        }
+
+        function logout() {
+            fetch('/api/logout', { method: 'POST' })
+                .then(() => window.location.href = '/login.html');
+        }
+
+        // Initialize page
+        checkAuth().then(() => {
+            loadGratitude();
+            loadMoodCalendar();
+        });
+    </script>
+</body>
+</html>
