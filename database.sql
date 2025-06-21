@@ -112,25 +112,4 @@ CREATE TRIGGER update_journal_entries_updated_at BEFORE UPDATE ON journal_entrie
 CREATE TRIGGER update_connection_requests_updated_at BEFORE UPDATE ON connection_requests
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Insert sample data (optional)
--- You can uncomment these lines to add some sample data for testing
 
--- INSERT INTO users (name, email, password, birthdate, bio) VALUES
--- ('Alice Johnson', 'alice@example.com', '$2b$10$example_hashed_password', '1995-06-15', 'Mental health advocate and yoga enthusiast'),
--- ('Bob Smith', 'bob@example.com', '$2b$10$example_hashed_password', '1988-03-22', 'Mindfulness practitioner and nature lover'),
--- ('Carol Davis', 'carol@example.com', '$2b$10$example_hashed_password', '1992-11-08', 'Journaling enthusiast and community supporter');
-
--- INSERT INTO journal_entries (user_id, title, content, category, is_public) VALUES
--- (1, 'Finding Peace in Nature', 'Today I spent time in the park and felt so much calmer. The sound of birds and rustling leaves helped quiet my anxious thoughts.', 'anxiety', true),
--- (2, 'Gratitude Practice', 'I am grateful for my supportive friends and family. Their love gives me strength during difficult times.', 'gratitude', true),
--- (3, 'Work-Life Balance', 'Learning to set boundaries at work has been challenging but necessary for my mental health.', 'work', false);
-
--- INSERT INTO moods (user_id, date, mood, emoji) VALUES
--- (1, CURRENT_DATE, 'calm', '😌'),
--- (2, CURRENT_DATE, 'happy', '😊'),
--- (3, CURRENT_DATE, 'thoughtful', '🤔');
-
--- INSERT INTO gratitude (user_id, text) VALUES
--- (1, 'I am grateful for the beautiful sunrise this morning'),
--- (2, 'Thankful for my morning meditation practice'),
--- (3, 'Grateful for a good night''s sleep');
