@@ -47,6 +47,9 @@
                 </div>
                 <button type="submit" class="auth-btn">Sign Up</button>
             </form>
+
+            <div id="errorMessage" class="error-message hidden"></div>
+            <div id="loadingMessage" class="loading-message hidden">Processing...</div>
         </div>
     </div>
 
@@ -56,6 +59,7 @@
             document.getElementById('signupForm').classList.add('hidden');
             document.querySelectorAll('.tab-btn')[0].classList.add('active');
             document.querySelectorAll('.tab-btn')[1].classList.remove('active');
+            hideMessages();
         }
 
         function showSignup() {
@@ -63,10 +67,38 @@
             document.getElementById('signupForm').classList.remove('hidden');
             document.querySelectorAll('.tab-btn')[0].classList.remove('active');
             document.querySelectorAll('.tab-btn')[1].classList.add('active');
+            hideMessages();
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            hideLoading();
+        }
+
+        function showLoading() {
+            document.getElementById('loadingMessage').classList.remove('hidden');
+            hideError();
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingMessage').classList.add('hidden');
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').classList.add('hidden');
+        }
+
+        function hideMessages() {
+            hideError();
+            hideLoading();
         }
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            showLoading();
+            
             const email = document.getElementById('loginEmail').value;
             const password = document.getElementById('loginPassword').value;
             
@@ -77,18 +109,23 @@
                     body: JSON.stringify({ email, password })
                 });
                 
+                const data = await response.json();
+                
                 if (response.ok) {
                     window.location.href = '/home.html';
                 } else {
-                    alert('Invalid credentials');
+                    showError(data.message || 'Login failed');
                 }
             } catch (error) {
-                alert('Login failed');
+                console.error('Login error:', error);
+                showError('Connection failed. Please check your internet connection.');
             }
         });
 
         document.getElementById('signupForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            showLoading();
+            
             const name = document.getElementById('signupName').value;
             const email = document.getElementById('signupEmail').value;
             const password = document.getElementById('signupPassword').value;
@@ -101,16 +138,45 @@
                     body: JSON.stringify({ name, email, password, birthdate })
                 });
                 
+                const data = await response.json();
+                
                 if (response.ok) {
                     alert('Account created successfully!');
                     showLogin();
+                    // Clear form
+                    document.getElementById('signupForm').reset();
                 } else {
-                    alert('Signup failed');
+                    showError(data.message || 'Signup failed');
                 }
             } catch (error) {
-                alert('Signup failed');
+                console.error('Signup error:', error);
+                showError('Connection failed. Please check your internet connection.');
             }
         });
     </script>
+
+    <style>
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .loading-message {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
 </body>
 </html>
